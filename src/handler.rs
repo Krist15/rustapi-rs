@@ -79,6 +79,33 @@ async fn create_todo_handler(
     }
 }
 
+#[get("/todos/{id}")]
+async fn get_todo_handler(
+    path: web::Path<uuid::Uuid>,
+    data: web::Data<AppState>,
+) -> impl Responder {
+    let note_id = path.into_inner();
+    let query_result = sqlx::query_as!(TodoModel, "SELECT * FROM todos WHERE id = $1", note_id)
+        .fetch_one(&data.db)
+        .await;
+
+    match query_result {
+        Ok(todo) => {
+            let todo_response = serde_json::json!({"status": "success", "data": serde_json::json!({
+                "todo": todo
+            })});
+
+            return HttpResponse::Ok().json(todo_response);
+        }
+
+        Err(_) => {
+            let message = format!("Todo with ID: {} not found", note_id);
+            return HttpResponse::NotFound()
+                .json(serde_json::json!({"status": "fail", "message": message}));
+        }
+    }
+}
+
 pub fn config(conf: &mut web::ServiceConfig) {
     let scope = web::scope("/api")
         .service(todo_list_handler)
