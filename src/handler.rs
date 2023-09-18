@@ -8,7 +8,7 @@ use chrono::prelude::*;
 use serde_json::json;
 
 #[get("/todos")]
-pub async fn todo_list_handler(
+async fn todo_list_handler(
     opts: web::Query<FilterOptions>,
     data: web::Data<AppState>,
 ) -> impl Responder {
@@ -30,12 +30,12 @@ pub async fn todo_list_handler(
             .json(json!({"status": "error", "message": message}));
     }
 
-    let notes = query_result.unwrap();
+    let todos = query_result.unwrap();
 
     let json_response = serde_json::json!({
         "status": "success",
-        "results": notes.len(),
-        "notes": notes
+        "results": todos.len(),
+        "todos": todos
     });
 
     HttpResponse::Ok().json(json_response)
@@ -84,8 +84,8 @@ async fn get_todo_handler(
     path: web::Path<uuid::Uuid>,
     data: web::Data<AppState>,
 ) -> impl Responder {
-    let note_id = path.into_inner();
-    let query_result = sqlx::query_as!(TodoModel, "SELECT * FROM todos WHERE id = $1", note_id)
+    let todo_id = path.into_inner();
+    let query_result = sqlx::query_as!(TodoModel, "SELECT * FROM todos WHERE id = $1", todo_id)
         .fetch_one(&data.db)
         .await;
 
@@ -99,17 +99,36 @@ async fn get_todo_handler(
         }
 
         Err(_) => {
-            let message = format!("Todo with ID: {} not found", note_id);
+            let message = format!("Todo with ID: {} not found", todo_id);
             return HttpResponse::NotFound()
                 .json(serde_json::json!({"status": "fail", "message": message}));
         }
     }
 }
 
+#[delete("/todos/{id}")]
+async fn delete_todo_handler(
+    path: web::Path<uuid::Uuid>,
+    data: web::Data<AppState>,
+) -> impl Responder {
+    let todo_id = path.into_inner();
+
+    let query_result = sqlx::query!("DELETE FROM todos WHERE id = $1", todo_id)
+        .execute(&data.db)
+        .await;
+
+    match query_result.unwrap().rows_affected() {
+        0 => return HttpResponse::NotFound().finish(),
+        _ => return HttpResponse::NoContent().finish(),
+    }
+}
+
 pub fn config(conf: &mut web::ServiceConfig) {
     let scope = web::scope("/api")
         .service(todo_list_handler)
-        .service(create_todo_handler);
+        .service(create_todo_handler)
+        .service(get_todo_handler)
+        .service(delete_todo_handler);
 
     conf.service(scope);
 }
