@@ -2,15 +2,11 @@ mod handler;
 mod model;
 mod schema;
 
-use std::vec;
-
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
-use actix_web::{get, http::header, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{http::header, web, App, HttpServer};
 use dotenv::dotenv;
-use serde_json::json;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::{Pool, Postgres};
+use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 
 struct AppState {
     db: Pool<Postgres>,
