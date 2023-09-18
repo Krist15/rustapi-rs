@@ -41,8 +41,48 @@ pub async fn todo_list_handler(
     HttpResponse::Ok().json(json_response)
 }
 
+#[post("/todos/")]
+async fn create_todo_handler(
+    body: web::Json<CreateTodoSchema>,
+    data: web::Data<AppState>,
+) -> impl Responder {
+    let query_result = sqlx::query_as!(
+        TodoModel,
+        "INSERT INTO todos (title, content, category) VALUES ($1, $2, $3) RETURNING *",
+        body.title.to_string(),
+        body.content.to_string(),
+        body.category.to_owned().unwrap_or("".to_string())
+    )
+    .fetch_one(&data.db)
+    .await;
+
+    match query_result {
+        Ok(todo) => {
+            let todo_response = serde_json::json!({"status": "success", "data": serde_json::json!({
+                "todo": todo
+            })});
+
+            return HttpResponse::Ok().json(todo_response);
+        }
+
+        Err(err) => {
+            if err
+                .to_string()
+                .contains("duplicate key value violates unique constraint")
+            {
+                return HttpResponse::BadRequest().json(serde_json::json!({"status": "fail", "message": "Todo with that title already exists"}));
+            }
+
+            return HttpResponse::InternalServerError()
+                .json(serde_json::json!({"status": "error", "message": format!("{:?}", err)}));
+        }
+    }
+}
+
 pub fn config(conf: &mut web::ServiceConfig) {
-    let scope = web::scope("/api").service(todo_list_handler);
+    let scope = web::scope("/api")
+        .service(todo_list_handler)
+        .service(create_todo_handler);
 
     conf.service(scope);
 }
