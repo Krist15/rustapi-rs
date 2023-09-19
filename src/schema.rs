@@ -23,8 +23,8 @@ pub struct CreateTodoSchema {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UpdateTodoSchema {
-    pub title: String,
-    pub content: String,
+    pub title: Option<String>,
+    pub content: Option<String>,
     pub category: Option<String>,
     pub published: Option<bool>,
 }

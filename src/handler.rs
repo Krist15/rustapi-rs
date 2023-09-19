@@ -123,11 +123,58 @@ async fn delete_todo_handler(
     }
 }
 
+#[patch("/todos/{id}")]
+async fn update_todo_handler(
+    path: web::Path<uuid::Uuid>,
+    body: web::Json<UpdateTodoSchema>,
+    data: web::Data<AppState>,
+) -> impl Responder {
+    let todo_id = path.into_inner();
+
+    let query_result = sqlx::query_as!(TodoModel, "SELECT * FROM todos WHERE id = $1", todo_id)
+        .fetch_one(&data.db)
+        .await;
+
+    if query_result.is_err() {
+        return HttpResponse::NotFound()
+            .json(serde_json::json!({"status": "fail","message": "error"}));
+    }
+
+    let now = Utc::now();
+    let todo = query_result.unwrap();
+
+    let query_result = sqlx::query_as!(TodoModel,
+        "UPDATE todos SET title = $1, content = $2, category = $3, published = $4, updated_at = $5 WHERE id = $6 RETURNING *",
+        body.title.to_owned().unwrap_or(todo.title),
+        body.content.to_owned().unwrap_or(todo.content),
+        body.category.to_owned().unwrap_or(todo.category.unwrap()),
+        body.published.unwrap_or(todo.published.unwrap()),
+        now,
+        todo_id
+    ).fetch_one(&data.db).await;
+
+    match query_result {
+        Ok(todo) => {
+            let todo_response = serde_json::json!({"status": "success","data": serde_json::json!({
+                "todo": todo
+            })});
+
+            return HttpResponse::Ok().json(todo_response);
+        }
+        Err(err) => {
+            let message = format!("Error: {:?}", err);
+            return HttpResponse::InternalServerError()
+                .json(serde_json::json!({"status": "error","message": message}));
+        }
+    }
+}
+
 pub fn config(conf: &mut web::ServiceConfig) {
     let scope = web::scope("/api")
         .service(todo_list_handler)
         .service(create_todo_handler)
         .service(get_todo_handler)
+        .service(update_todo_handler)
         .service(delete_todo_handler);
 
     conf.service(scope);
